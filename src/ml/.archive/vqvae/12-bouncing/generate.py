@@ -1,7 +1,8 @@
-from PIL import Image, ImageDraw
+import json
+
 import numpy as np
 from moviepy.editor import ImageSequenceClip
-import json
+from PIL import Image, ImageDraw
 
 
 class Ball:

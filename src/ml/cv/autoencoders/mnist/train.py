@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-
 from ml_zoo import datamodules, models, trainers
 
 if __name__ == "__main__":

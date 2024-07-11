@@ -1,8 +1,7 @@
-from torchvision import transforms
 import torch
 import torch.nn as nn
-
 from ml_zoo import datamodules, models, trainers
+from torchvision import transforms
 
 if __name__ == "__main__":
     # Load the QMNIST data
@@ -16,7 +15,7 @@ if __name__ == "__main__":
                     transforms.ToTensor(),
                 ]
             ),
-        }
+        },
     )
     dm.prepare_data()
     dm.setup()

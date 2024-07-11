@@ -1,12 +1,12 @@
+import lightning.pytorch as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torchvision
 import tqdm as tqdm
-import lightning.pytorch as pl
-from pytorch_lightning.loggers import WandbLogger
 import wandb
+from pytorch_lightning.loggers import WandbLogger
 from torchmetrics.image.fid import FrechetInceptionDistance
 
 

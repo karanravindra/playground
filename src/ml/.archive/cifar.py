@@ -1,21 +1,20 @@
-import lightning.pytorch as pl
-from lightning.pytorch.loggers import WandbLogger
+import os
+import sys
 
+import lightning.pytorch as pl
 import torch.nn as nn
 import torchvision.transforms as transforms
-
+from lightning.pytorch.loggers import WandbLogger
 from torchinfo import summary
-import sys
-import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from ml_zoo import (
+    VGG,
     CIFARDataModule,
     CIFARDataModuleConfig,
     Classifier,
     ClassifierConfig,
-    VGG,
     VGGConfig,
 )
 

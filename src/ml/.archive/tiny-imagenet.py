@@ -1,23 +1,21 @@
-import sys
 import os
+import sys
 
 import lightning.pytorch as pl
-from lightning.pytorch.loggers import WandbLogger
-
 import torch.nn as nn
 import torchvision.transforms as transforms
-
+from lightning.pytorch.loggers import WandbLogger
 from torchinfo import summary
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from ml_zoo import (
-    TinyImageNetDataModuleConfig,
-    TinyImageNetDataModule,
     Classifier,
     ClassifierConfig,
     ResNet,
     ResNetConfig,
+    TinyImageNetDataModule,
+    TinyImageNetDataModuleConfig,
 )
 
 
