@@ -5,7 +5,6 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 
 from torchinfo import summary
-import torch
 import sys
 import os
 
