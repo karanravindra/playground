@@ -1,4 +1,4 @@
-ml-zoo @ git+https://github.com/karanravindra/ml-zoo.git@0.1.1
+ml-zoo @ git+https://github.com/karanravindra/ml-zoo.git@v0.1.2
 
 # pytorch
 torch
@@ -13,6 +13,8 @@ ema-pytorch
 huggingface_hub
 diffusers
 transformers
+timm
+flash_attn
 
 # kaggle
 kaggle
@@ -28,6 +30,7 @@ lightning
 torchmetrics
 
 # misc
+ollama
 wandb
 pygame
 moviepy
