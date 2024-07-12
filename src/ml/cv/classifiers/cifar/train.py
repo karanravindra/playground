@@ -101,10 +101,10 @@ class Classifer(nn.Module):
         return x
 
 
-model = Classifer().to("mps")
+model = Classifer().to("cuda")
 summary(
     model,
-    input_data=torch.randn(64, 3, 32, 32, device="mps", requires_grad=False),
+    input_data=torch.randn(64, 3, 32, 32, device="cuda", requires_grad=False),
 )
 
 ema = EMA(model, beta=0.9999, update_after_step=100, update_every=10)
@@ -118,7 +118,7 @@ for epoch in range(10):
     model.train()
     pbar = tqdm(trian_loader, desc=f"Epoch {epoch+1}")
     for img, label in pbar:
-        img, label = img.to("mps"), label.to("mps")
+        img, label = img.to("cuda"), label.to("cuda")
         optimizer.zero_grad()
         output = model(img)
 
@@ -137,7 +137,7 @@ for epoch in range(10):
     test_acc = 0
     with torch.no_grad():
         for img, label in tqdm(test_loader, desc="Testing", leave=True):
-            img, label = img.to("mps"), label.to("mps")
+            img, label = img.to("cuda"), label.to("cuda")
             output = model(img)
             test_loss += criterion(output, label)
             test_acc += (output.argmax(1) == label).float().mean()
