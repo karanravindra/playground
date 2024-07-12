@@ -1,4 +1,4 @@
-ml-zoo @ git+https://github.com/karanravindra/ml-zoo.git@v0.1.2
+nn-zoo
 
 # pytorch
 torch
