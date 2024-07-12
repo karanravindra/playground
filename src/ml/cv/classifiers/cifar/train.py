@@ -1,12 +1,12 @@
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tqdm import tqdm
 import torchvision
-import matplotlib.pyplot as plt
 from ema_pytorch import EMA
-from torchinfo import summary
 from ml_zoo.datamodules import CIFARDataModule
+from torchinfo import summary
+from tqdm import tqdm
 
 dm = CIFARDataModule(
     data_dir="data",
@@ -32,6 +32,7 @@ dm.setup()
 trian_loader = dm.train_dataloader()
 test_loader = dm.test_dataloader()
 
+
 class DepthwiseSeparableConv2d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1):
         super(DepthwiseSeparableConv2d, self).__init__()
@@ -51,6 +52,7 @@ class DepthwiseSeparableConv2d(nn.Module):
         x = self.act(x)
 
         return x
+
 
 class ConvStack(nn.Module):
     def __init__(
@@ -75,6 +77,7 @@ class ConvStack(nn.Module):
 
     def forward(self, x):
         return self.layers(x)
+
 
 class Classifer(nn.Module):
     def __init__(self):
@@ -118,14 +121,16 @@ for epoch in range(10):
         img, label = img.to("mps"), label.to("mps")
         optimizer.zero_grad()
         output = model(img)
-        
+
         loss = criterion(output, label)
-            
+
         loss.backward()
         optimizer.step()
 
         ema.update()
-        pbar.set_postfix_str(f"loss: {loss.item():.4f}, test_loss: {test_loss:.4f}, test_acc: {test_acc:.4f}")
+        pbar.set_postfix_str(
+            f"loss: {loss.item():.4f}, test_loss: {test_loss:.4f}, test_acc: {test_acc:.4f}"
+        )
 
     model.eval()
     test_loss = 0
@@ -141,5 +146,5 @@ for epoch in range(10):
     test_loss = test_loss.item()
     test_acc /= len(test_loader)
     test_acc = test_acc.item()
-    
+
 torch.save(model.state_dict(), "model.pth")
