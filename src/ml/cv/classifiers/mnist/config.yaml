@@ -1,0 +1,38 @@
+program: train.py
+name: classify-mnist
+method: bayes
+
+metric:
+  goal: minimize
+  name: val_loss
+
+parameters:
+  learning_rate:
+    min: !!float 1e-5
+    max: !!float 1e-3
+  width:
+    min: 1
+    max: 16
+  depth:
+    min: 1
+    max: 6
+  dropout_prob:
+    min: 0
+    max: 1
+  use_linear_norm:
+    values: [true, false]
+  optim:
+    values: ["adam", "sgd"]
+  batch_size:
+    min: 32
+    max: 256
+  epochs:
+    min: 10
+    max: 200
+
+
+command:
+  - ${env}
+  - python3
+  - ${program}
+  - ${args}
