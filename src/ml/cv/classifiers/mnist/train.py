@@ -93,8 +93,24 @@ def parse_args():
     parser.add_argument(
         "--num_workers",
         type=int,
-        default=2,
+        default=4,
         help="Number of workers for the dataloader",
+    )
+    parser.add_argument(
+        "--prefetch_factor",
+        type=int,
+        default=8,
+        help="Prefetch factor for the dataloader",
+    )
+    parser.add_argument(
+        "--pin_memory",
+        action="store_true",
+        help="Pin memory for the dataloader",
+    )
+    parser.add_argument(
+        "--persistent_workers",
+        action="store_true",
+        help="Use persistent workers for the dataloader",
     )
 
     return parser.parse_args()
@@ -116,8 +132,9 @@ def main(args):
         loader_params={
             "batch_size": args.batch_size,
             "num_workers": args.num_workers,
-            "persistent_workers": True,
-            "pin_memory": True,
+            "persistent_workers": args.persistent_workers,
+            "pin_memory": args.pin_memory,
+            "prefetch_factor": args.prefetch_factor,
         },
     )
 
