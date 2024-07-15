@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
-from lightning.pytorch import LightningModule
 from lightning import LightningDataModule
+from lightning.pytorch import LightningModule
 
 __all__ = ["ClassifierTrainer", "ConvStack"]
+
 
 class DepthwiseSeparableConv2d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1):
@@ -49,11 +50,11 @@ class ConvStack(nn.Module):
 
     def forward(self, x):
         x = self.layers[0](x)
-        
+
         for layer in self.layers[1:]:
             residual = x
             x = layer(x) + residual
-            
+
         return x
 
 

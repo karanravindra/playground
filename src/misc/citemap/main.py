@@ -1,5 +1,5 @@
-from db import *
 import requests
+from db import *
 
 
 def request_paper(title):

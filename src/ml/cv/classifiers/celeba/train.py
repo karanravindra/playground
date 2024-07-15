@@ -82,7 +82,7 @@ if __name__ == "__main__":
         device = "cuda"
     elif torch.backends.mps.is_available():
         device = "mps"
-        
+
     ## Load the data
     dm = CIFARDataModule(
         data_dir="data",

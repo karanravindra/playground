@@ -1,12 +1,13 @@
 import argparse
-from torch import nn
-from torch.nn import functional as F
+
 import torchvision
-from torchinfo import summary
 from lightning import Trainer
 from lightning.pytorch.loggers import WandbLogger
-from trainer import ClassifierTrainer, ConvStack
 from nn_zoo.datamodules import MNISTDataModule
+from torch import nn
+from torch.nn import functional as F
+from torchinfo import summary
+from trainer import ClassifierTrainer, ConvStack
 
 
 class Classifer(nn.Module):
