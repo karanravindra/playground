@@ -1,89 +1,124 @@
-import torch
-import torch.nn as nn
+import argparse
+
+from torch import nn
+from torch.nn import functional as F
 import torchvision
-from ema_pytorch import EMA
-from ml_zoo.datamodules import CIFARDataModule
 from torchinfo import summary
-from tqdm import tqdm
+from lightning import Trainer
+from lightning.pytorch.loggers import WandbLogger
 
-
-class DepthwiseSeparableConv2d(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1):
-        super(DepthwiseSeparableConv2d, self).__init__()
-        self.depthwise = nn.Conv2d(
-            in_channels, in_channels, kernel_size, stride, padding, groups=in_channels
-        )
-        self.pointwise = nn.Conv2d(in_channels, out_channels, 1)
-        self.norm1 = nn.GroupNorm(4, out_channels)
-        self.act = nn.GELU()
-
-    def forward(self, x):
-        x = self.depthwise(x)
-        x = self.act(x)
-
-        x = self.pointwise(x)
-        x = self.norm1(x)
-        x = self.act(x)
-
-        return x
-
-
-class ConvStack(nn.Module):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        num_layers,
-        kernel_size=3,
-        stride=1,
-        padding=1,
-        conv_type=DepthwiseSeparableConv2d,
-    ):
-        super(ConvStack, self).__init__()
-        self.layers = nn.Sequential(
-            *[
-                conv_type(in_channels, out_channels, kernel_size, stride, padding)
-                if _ == 0
-                else conv_type(out_channels, out_channels, kernel_size, stride, padding)
-                for _ in range(num_layers)
-            ]
-        )
-
-    def forward(self, x):
-        return self.layers(x)
+from nn_zoo.datamodules import CIFARDataModule
+from nn_zoo.models.components import ConvStack
+from nn_zoo.trainers import ClassifierTrainer
 
 
 class Classifer(nn.Module):
-    def __init__(self):
+    def __init__(self, width: int, depth: int, dropout_p: float, use_linear_norm: bool):
         super(Classifer, self).__init__()
+
+        def down_block(in_channels, out_channels, depth):
+            return nn.Sequential(
+                ConvStack(in_channels, out_channels, depth),
+                nn.MaxPool2d(2),
+            )
+
         self.backbone = nn.Sequential(
-            ConvStack(3, 32, 2),
-            nn.MaxPool2d(2),
-            ConvStack(32, 64, 2),
-            nn.MaxPool2d(2),
-            ConvStack(64, 128, 2),
-            nn.MaxPool2d(2),
-            ConvStack(128, 256, 2),
-            nn.MaxPool2d(2),
-            ConvStack(256, 256, 2),
+            down_block(3, width, depth),
+            down_block(width, width * 2, depth),
+            down_block(width * 2, width * 4, depth),
+            down_block(width * 4, width * 8, depth),
+            ConvStack(width * 8, depth * 8, depth),
         )
-        self.classifier = nn.Linear(256 * 2 * 2, 10, bias=False)
+        norm = nn.LazyBatchNorm1d() if use_linear_norm else nn.Identity()
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.GELU(),
+            nn.Dropout(dropout_p),
+            norm,
+            nn.LazyLinear(10),
+        )
 
-    def forward(self, x):
-        x = self.backbone(x).view(x.size(0), -1)
+    def forward(self, x, y=None):
+        x = self.backbone(x)
         x = self.classifier(x)
-        return x
+
+        if y is None:
+            return x
+        else:
+            loss = F.cross_entropy(x, y)
+            return x, loss
 
 
-if __name__ == "__main__":
-    ## Get the device
-    device = "cpu"
-    if torch.backends.cudnn.is_available():
-        device = "cuda"
-    elif torch.backends.mps.is_available():
-        device = "mps"
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train a MNIST classifier")
+    parser.add_argument(
+        "--learning_rate",
+        type=float,
+        default=1e-3,
+        help="Learning rate for the optimizer",
+    )
+    parser.add_argument(
+        "--width",
+        type=int,
+        default=4,
+        help="Width of the first layer of the model",
+    )
+    parser.add_argument(
+        "--depth",
+        type=int,
+        default=2,
+        help="Depth of the convolutional stack",
+    )
+    parser.add_argument(
+        "--dropout_prob",
+        type=float,
+        default=0.1,
+        help="Dropout probability for the classifier",
+    )
+    parser.add_argument(
+        "--use_linear_norm",
+        action="store_true",
+        help="Use a linear layer for normalization",
+    )
+    parser.add_argument(
+        "--optim",
+        type=str,
+        default="adam",
+        help="Optimizer to use for training",
+    )
+    parser.add_argument(
+        "--batch_size", type=int, default=64, help="Batch size for training"
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=1, help="Number of training epochs"
+    )
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=2,
+        help="Number of workers for the dataloader",
+    )
+    parser.add_argument(
+        "--prefetch_factor",
+        type=int,
+        default=2,
+        help="Prefetch factor for the dataloader",
+    )
+    parser.add_argument(
+        "--pin_memory",
+        action="store_true",
+        help="Pin memory for the dataloader",
+    )
+    parser.add_argument(
+        "--persistent_workers",
+        action="store_true",
+        help="Use persistent workers for the dataloader",
+    )
 
-    ## Load the data
+    return parser.parse_args()
+
+
+def main(args):
     dm = CIFARDataModule(
         data_dir="data",
         dataset_params={
@@ -91,70 +126,42 @@ if __name__ == "__main__":
             "transform": torchvision.transforms.Compose(
                 [
                     torchvision.transforms.Resize((32, 32)),
-                    torchvision.transforms.RandomHorizontalFlip(),
-                    torchvision.transforms.RandomVerticalFlip(),
-                    torchvision.transforms.RandomRotation(45),
                     torchvision.transforms.ToTensor(),
                 ]
             ),
         },
         loader_params={
-            "batch_size": 64,
-            "num_workers": 2,
+            "batch_size": args.batch_size,
+            "num_workers": args.num_workers,
+            "persistent_workers": args.persistent_workers,
+            "pin_memory": args.pin_memory,
+            "prefetch_factor": args.prefetch_factor,
         },
     )
-    dm.prepare_data()
-    dm.setup()
-    trian_loader = dm.train_dataloader()
-    test_loader = dm.test_dataloader()
 
-    ## Create the model
-    model = Classifer().to(device)
-    summary(
-        model,
-        input_data=torch.randn(64, 3, 32, 32, device=device, requires_grad=False),
+    classifier_trainer = ClassifierTrainer(
+        model=Classifer(
+            width=args.width,
+            depth=args.depth,
+            dropout_p=args.dropout_prob,
+            use_linear_norm=args.use_linear_norm,
+        ),
+        dm=dm,
+        optim=args.optim,
+        optim_kwargs={"lr": args.learning_rate},
     )
 
-    ## Create the optimizer and criterion
-    ema = EMA(model, beta=0.9999, update_after_step=100, update_every=10)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    criterion = nn.CrossEntropyLoss()
+    summary(classifier_trainer.model, input_size=(args.batch_size, 1, 32, 32))
 
-    ## Train the model
-    test_loss = 0
-    test_acc = 0
-    for epoch in range(1):
-        model.train()
-        pbar = tqdm(trian_loader, desc=f"Epoch {epoch+1}")
-        for img, label in pbar:
-            img, label = img.to(device), label.to(device)
-            optimizer.zero_grad()
-            output = model(img)
+    logger = WandbLogger(project="cifar-classifier", name="classifier", log_model=True)
+    logger.watch(classifier_trainer.model, log="all")
+    logger.log_hyperparams(vars(args))
 
-            loss = criterion(output, label)
+    trainer = Trainer(max_epochs=args.epochs, logger=logger, default_root_dir="logs")
+    trainer.fit(classifier_trainer)
+    trainer.test(classifier_trainer)
 
-            loss.backward()
-            optimizer.step()
 
-            ema.update()
-            pbar.set_postfix_str(
-                f"loss: {loss.item():.4f}, test_loss: {test_loss:.4f}, test_acc: {test_acc:.4f}"
-            )
-
-        model.eval()
-        test_loss = 0
-        test_acc = 0
-        with torch.no_grad():
-            for img, label in tqdm(test_loader, desc="Testing", leave=True):
-                img, label = img.to(device), label.to(device)
-                output = model(img)
-                test_loss += criterion(output, label)
-                test_acc += (output.argmax(1) == label).float().mean()
-
-        test_loss /= len(test_loader)
-        test_loss = test_loss.item()
-        test_acc /= len(test_loader)
-        test_acc = test_acc.item()
-
-    ## Save the model
-    torch.save(model.state_dict(), "model.pth")
+if __name__ == "__main__":
+    args = parse_args()
+    main(args)

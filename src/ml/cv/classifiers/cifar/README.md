@@ -1,6 +1,6 @@
-# Classifier Training
+# CIFAR10 Classifier Training
 
-This project contains a script for training a classifier on a dataset using PyTorch and PyTorch Lightning. The script includes configurable hyperparameters and utilizes a custom convolutional neural network model for classification.
+This project contains a script for training a classifier on the CIFAR10 dataset using PyTorch and PyTorch Lightning. The script includes configurable hyperparameters and utilizes a custom convolutional neural network model for classification.
 
 ## Requirements
 

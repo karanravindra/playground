@@ -1,13 +1,15 @@
 import argparse
 
-import torchvision
-from lightning import Trainer
-from lightning.pytorch.loggers import WandbLogger
-from nn_zoo.datamodules import MNISTDataModule
 from torch import nn
 from torch.nn import functional as F
+import torchvision
 from torchinfo import summary
-from trainer import ClassifierTrainer, ConvStack
+from lightning import Trainer
+from lightning.pytorch.loggers import WandbLogger
+
+from nn_zoo.datamodules import MNISTDataModule
+from nn_zoo.models.components import ResidualStack
+from nn_zoo.trainers import ClassifierTrainer
 
 
 class Classifer(nn.Module):
@@ -16,7 +18,7 @@ class Classifer(nn.Module):
 
         def down_block(in_channels, out_channels, depth):
             return nn.Sequential(
-                ConvStack(in_channels, out_channels, depth),
+                ResidualStack(depth, in_channels, out_channels, 3),
                 nn.MaxPool2d(2),
             )
 
@@ -25,7 +27,7 @@ class Classifer(nn.Module):
             down_block(width, width * 2, depth),
             down_block(width * 2, width * 4, depth),
             down_block(width * 4, width * 8, depth),
-            ConvStack(width * 8, depth * 8, depth),
+            ResidualStack(depth, width * 8, width * 8, 3),
         )
         norm = nn.LazyBatchNorm1d() if use_linear_norm else nn.Identity()
         self.classifier = nn.Sequential(
@@ -93,23 +95,25 @@ def parse_args():
     parser.add_argument(
         "--num_workers",
         type=int,
-        default=4,
+        default=2,
         help="Number of workers for the dataloader",
     )
     parser.add_argument(
         "--prefetch_factor",
         type=int,
-        default=8,
+        default=4,
         help="Prefetch factor for the dataloader",
     )
     parser.add_argument(
         "--pin_memory",
         action="store_true",
+        default=True,
         help="Pin memory for the dataloader",
     )
     parser.add_argument(
         "--persistent_workers",
         action="store_true",
+        default=True,
         help="Use persistent workers for the dataloader",
     )
 
@@ -117,7 +121,6 @@ def parse_args():
 
 
 def main(args):
-    ## Load the data
     dm = MNISTDataModule(
         data_dir="data",
         dataset_params={
@@ -138,7 +141,6 @@ def main(args):
         },
     )
 
-    ## Define the model
     classifier_trainer = ClassifierTrainer(
         model=Classifer(
             width=args.width,
