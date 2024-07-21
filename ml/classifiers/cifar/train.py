@@ -8,34 +8,52 @@ from lightning import Trainer
 from lightning.pytorch.loggers import WandbLogger
 
 from nn_zoo.datamodules import CIFARDataModule
-from nn_zoo.models.components import ConvStack
+from nn_zoo.models.components import ResidualStack, DepthwiseSeparableConv2d
 from nn_zoo.trainers import ClassifierTrainer
+
+
+class Block(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int, num_layers: int):
+        super(Block, self).__init__()
+        self.layers = nn.ModuleList([
+            self._block(in_channels, out_channels)
+            if i == 0
+            else self._block(out_channels, out_channels)
+            for i in range(num_layers)
+        ])
+
+    def _block(self, in_channels: int, out_channels: int):
+        return nn.Sequential(
+            DepthwiseSeparableConv2d(in_channels, out_channels, 3),
+            # nn.BatchNorm2d(out_channels),
+            nn.GroupNorm(out_channels // 4 if out_channels >= 4 else 1, out_channels),
+            nn.ReLU(),
+        )
+
+    def forward(self, x):
+        x = self.layers[0](x)
+        for layer in self.layers[1:]:
+            x = x + layer(x)
+        return x
 
 
 class Classifer(nn.Module):
     def __init__(self, width: int, depth: int, dropout_p: float, use_linear_norm: bool):
         super(Classifer, self).__init__()
 
-        def down_block(in_channels, out_channels, depth):
-            return nn.Sequential(
-                ConvStack(in_channels, out_channels, depth),
-                nn.MaxPool2d(2),
-            )
-
         self.backbone = nn.Sequential(
-            down_block(3, width, depth),
-            down_block(width, width * 2, depth),
-            down_block(width * 2, width * 4, depth),
-            down_block(width * 4, width * 8, depth),
-            ConvStack(width * 8, depth * 8, depth),
+            Block(3, width, depth),
+            nn.MaxPool2d(2),
+            Block(width, width * 2, depth),
+            nn.MaxPool2d(2),
+            Block(width * 2, width * 4, depth),
+            nn.MaxPool2d(2),
+            Block(width * 4, width * 8, depth),
+            nn.MaxPool2d(2),
+            Block(width * 8, width * 8, depth),
         )
-        norm = nn.LazyBatchNorm1d() if use_linear_norm else nn.Identity()
         self.classifier = nn.Sequential(
-            nn.Flatten(),
-            nn.GELU(),
-            nn.Dropout(dropout_p),
-            norm,
-            nn.LazyLinear(10),
+            nn.Flatten(), nn.LazyLinear(64), nn.ReLU(), nn.Linear(64, 10)
         )
 
     def forward(self, x, y=None):
@@ -123,12 +141,10 @@ def main(args):
         data_dir="data",
         dataset_params={
             "download": True,
-            "transform": torchvision.transforms.Compose(
-                [
-                    torchvision.transforms.Resize((32, 32)),
-                    torchvision.transforms.ToTensor(),
-                ]
-            ),
+            "transform": torchvision.transforms.Compose([
+                torchvision.transforms.Resize((32, 32)),
+                torchvision.transforms.ToTensor(),
+            ]),
         },
         loader_params={
             "batch_size": args.batch_size,
@@ -151,7 +167,7 @@ def main(args):
         optim_kwargs={"lr": args.learning_rate},
     )
 
-    summary(classifier_trainer.model, input_size=(args.batch_size, 1, 32, 32))
+    summary(classifier_trainer.model, input_size=(args.batch_size, 3, 32, 32))
 
     logger = WandbLogger(project="cifar-classifier", name="classifier", log_model=True)
     logger.watch(classifier_trainer.model, log="all")

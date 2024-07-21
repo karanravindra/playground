@@ -7,66 +7,42 @@ from torchinfo import summary
 from lightning import Trainer
 from lightning.pytorch.loggers import WandbLogger
 
-from nn_zoo.datamodules import CIFARDataModule
-from nn_zoo.models.components import ResidualStack, DepthwiseSeparableConv2d
-from nn_zoo.trainers import AutoEncoderTrainer
+from nn_zoo.datamodules import MNISTDataModule
+from nn_zoo.trainers import ClassifierTrainer
 
-class Block(nn.Sequential):
-    def __init__(self, in_channels: int, out_channels: int, num_layers: int):
-        super(Block, self).__init__(*[
-            self._block(in_channels, out_channels)
-            if i == 0
-            else self._block(out_channels, out_channels)
-            for i in range(num_layers)
-        ])
-        
-    def _block(self, in_channels: int, out_channels: int):
-        return nn.Sequential(
-            DepthwiseSeparableConv2d(in_channels, out_channels, 3),
-            nn.BatchNorm2d(out_channels),
+
+class Classifer(nn.Module):
+    def __init__(self, width: int, depth: int):
+        super(Classifer, self).__init__()
+        self.backbone = nn.Sequential(
+            nn.Conv2d(1, 8, 3, padding=1),
             nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(8, 16, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(16, 16, 3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+        )
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.LazyLinear(10),
         )
 
-class AutoEncoder(nn.Module):
-    def __init__(self, width: int, depth: int, dropout_p: float, use_linear_norm: bool):
-        super(AutoEncoder, self).__init__()
-        self.encoder = nn.Sequential(
-            Block(1, width, depth),
-            nn.MaxPool2d(2),
-            Block(width, width * 2, depth),
-            nn.MaxPool2d(2),
-            Block(width * 2, width * 4, depth),
-            nn.MaxPool2d(2),
-            Block(width * 4, width * 4, depth),
-        )
-        self.decoder = nn.Sequential(
-            Block(width * 4, width * 4, depth),
-            nn.Upsample(scale_factor=2),
-            Block(width * 4, width * 2, depth),
-            nn.Upsample(scale_factor=2),
-            Block(width * 2, width, depth),
-            nn.Upsample(scale_factor=2),
-            Block(width, 1, depth),
-            nn.Sigmoid(),
-        )
+    def forward(self, x, *args, **kwargs):
+        x = self.backbone(x)
+        x = self.classifier(x)
 
-    def forward(self, x, y=None):
-        if y is not None:
-            # OVERRIDE `y`
-            y = x
-            
-        x = self.encoder(x)
-        x = self.decoder(x)
+        return x
 
-        if y is None:
-            return x
-        else:
-            loss = F.binary_cross_entropy(x, y)
-            return x, loss
+    @classmethod
+    def loss(cls, y_hat, y):
+        return F.cross_entropy(y_hat, y)
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train a CIFAR autoencoder")
+    parser = argparse.ArgumentParser(description="Train a MNIST classifier")
     parser.add_argument(
         "--learning_rate",
         type=float,
@@ -76,7 +52,7 @@ def parse_args():
     parser.add_argument(
         "--width",
         type=int,
-        default=8,
+        default=4,
         help="Width of the first layer of the model",
     )
     parser.add_argument(
@@ -100,7 +76,7 @@ def parse_args():
     parser.add_argument(
         "--num_workers",
         type=int,
-        default=4,
+        default=2,
         help="Number of workers for the dataloader",
     )
     parser.add_argument(
@@ -126,7 +102,7 @@ def parse_args():
 
 
 def main(args):
-    dm = CIFARDataModule(
+    dm = MNISTDataModule(
         data_dir="data",
         dataset_params={
             "download": True,
@@ -146,25 +122,20 @@ def main(args):
         },
     )
 
-    classifier_trainer = AutoEncoderTrainer(
-        model=AutoEncoder(
-            width=args.width,
-            depth=args.depth,
-            dropout_p=args.dropout_prob,
-            use_linear_norm=args.use_linear_norm,
-        ),
+    classifier_trainer = ClassifierTrainer(
+        model=Classifer(width=args.width, depth=args.depth),
         dm=dm,
         optim=args.optim,
         optim_kwargs={"lr": args.learning_rate},
     )
 
-    summary(classifier_trainer.model, input_size=(args.batch_size, 3, 32, 32), depth=2)
+    summary(classifier_trainer.model, input_size=(args.batch_size, 1, 32, 32))
 
-    logger = WandbLogger(project="cifar-autoencoder", name="autoencoder", log_model=True)
+    logger = WandbLogger(project="mnist-classifier", name="classifier", log_model=True)
     logger.watch(classifier_trainer.model, log="all")
     logger.log_hyperparams(vars(args))
 
-    trainer = Trainer(max_epochs=args.epochs, logger=logger, default_root_dir="logs", accumulate_grad_batches=1, check_val_every_n_epoch=8)
+    trainer = Trainer(max_epochs=args.epochs, logger=logger, default_root_dir="logs")
     trainer.fit(classifier_trainer)
     trainer.test(classifier_trainer)
 

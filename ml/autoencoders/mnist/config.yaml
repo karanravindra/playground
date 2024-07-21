@@ -1,0 +1,21 @@
+program: train.py
+name: classify-mnist
+method: grid
+
+metric:
+  goal: minimize
+  name: val_loss
+
+parameters:
+  learning_rate:
+    values: [!!float 1e-3, !!float 4e-4, !!float 2e-4]
+  width:
+    values: [2, 4, 8]
+  depth:
+    values: [1, 2, 4]
+
+command:
+  - ${env}
+  - python3
+  - ${program}
+  - ${args}
