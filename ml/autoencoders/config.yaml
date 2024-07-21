@@ -1,5 +1,5 @@
 program: train.py
-name: classify-mnist
+name: encoder
 method: grid
 
 metric:
@@ -7,6 +7,8 @@ metric:
   name: val_loss
 
 parameters:
+  model:
+    values: [mnist]
   learning_rate:
     values: [!!float 1e-3, !!float 4e-4, !!float 2e-4]
   width:
