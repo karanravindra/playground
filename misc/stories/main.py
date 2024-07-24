@@ -24,7 +24,7 @@ for _ in trange(100, desc="Generating"):
         stop=None,
     )
 
-    with open(f"./docs/{hash(completion.choices[0].message.content)}.txt", "w") as f:
+    with open(f"/Users/karan/projects/playground/misc/stories/docs/{hash(completion.choices[0].message.content)}.txt", "w") as f:
         assert completion.choices[0].message.content is not None
         f.write(completion.choices[0].message.content)
         f.close()

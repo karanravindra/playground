@@ -1,8 +1,7 @@
-import torch
 from torch import nn
 from torch.nn import functional as F
 from torchinfo import summary
-from nn_zoo.models.components import DepthwiseSeparableConv2d
+from nn_zoo.models.components import DepthwiseSeparableConv2d, VectorQuantizer
 
 
 class Block(nn.Module):
@@ -19,10 +18,9 @@ class Block(nn.Module):
 
     def _block(self, in_channels: int, out_channels: int):
         return nn.Sequential(
+            nn.GroupNorm(in_channels // 4 if in_channels >= 4 else 1, in_channels),
             DepthwiseSeparableConv2d(in_channels, out_channels, 3),
-            # nn.BatchNorm2d(out_channels),
-            nn.GroupNorm(out_channels // 4 if out_channels >= 4 else 1, out_channels),
-            nn.ReLU(),
+            nn.GELU(),
         )
 
     def forward(self, x):
@@ -32,39 +30,61 @@ class Block(nn.Module):
         return x
 
 
+class DownBlock(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int, depth: int):
+        super(DownBlock, self).__init__()
+        self.block = nn.Sequential(
+            nn.MaxPool2d(2),
+            Block(in_channels, out_channels, depth),
+        )
+
+    def forward(self, x):
+        return self.block(x)
+    
+class UpBlock(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int, depth: int):
+        super(UpBlock, self).__init__()
+        self.block = nn.Sequential(
+            nn.Upsample(scale_factor=2),
+            Block(in_channels, out_channels, depth),
+        )
+
+    def forward(self, x):
+        return self.block(x)
+
 class AutoEncoder(nn.Module):
     def __init__(self, width: int, depth: int):
         super(AutoEncoder, self).__init__()
         self.encoder = nn.Sequential(
             Block(1, width, depth),
-            nn.MaxPool2d(2),
-            Block(width, width * 2, depth),
-            nn.MaxPool2d(2),
-            Block(width * 2, width * 4, depth),
-            nn.MaxPool2d(2),
-            Block(width * 4, width * 4, depth),
+            DownBlock(width, width * 2, depth),
+            DownBlock(width * 2, width * 4, depth),
+            DownBlock(width * 4, width * 4, depth),
+            DepthwiseSeparableConv2d(width * 4, width, 3),
         )
+        # self.vq = VectorQuantizer(width, 8, use_ema=True, decay=0.99, epsilon=1e-5)
+        self.vq = nn.Identity()
         self.decoder = nn.Sequential(
-            Block(width * 4, width * 4, depth),
-            nn.Upsample(scale_factor=2),
-            Block(width * 4, width * 2, depth),
-            nn.Upsample(scale_factor=2),
-            Block(width * 2, width, depth),
-            nn.Upsample(scale_factor=2),
-            DepthwiseSeparableConv2d(width, 1, 3),
+            DepthwiseSeparableConv2d(width, width * 4, 3),
+            UpBlock(width * 4, width * 4, depth),
+            UpBlock(width * 4, width * 2, depth),
+            UpBlock(width * 2, width, depth),
+            Block(width, 1, depth),
             nn.Sigmoid(),
         )
 
     def forward(self, x, y=None):
         x = self.encoder(x)
-        x = self.decoder(x)
+        # quant_x, dict_loss, commit_loss, indices = self.vq(x)
+        quant_x = self.vq(x)
+        x = self.decoder(quant_x)
         return x
 
     @classmethod
     def loss(cls, x, y):
         return F.binary_cross_entropy(x, y)
 
-if __name__ == "__main__":
-    model = AutoEncoder(width=2, depth=1)
-    summary(model, input_size=(1, 3, 32, 32), depth=2)
 
+if __name__ == "__main__":
+    model = AutoEncoder(width=4, depth=4)
+    summary(model, input_size=(64, 1, 32, 32), depth=2, col_names=["output_size", "params_percent"])

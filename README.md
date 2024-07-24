@@ -2,9 +2,9 @@
 
 ## Overview
 
-This repository contains a collection of some random projects I have worked on.
+This repository is the folder on my computer where I do random coding stuff. Browse at your own risk.
 
-Projects in a `*/.archive` folder are still in early prototypes. Projects that are next to it have README.md files that elaborate on what they are.
+## Completed Projects
 
 ## Installation
 
@@ -21,5 +21,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contributing
 
-Feel free to contribute to this project. Just create a pull request with your changes.
-
+Contributions will not be accepted. Feel free to fork this however.

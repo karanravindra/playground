@@ -1,5 +1,5 @@
 program: train.py
-name: encoder
+name: learning rate sweep
 method: grid
 
 metric:
@@ -14,7 +14,7 @@ parameters:
   width:
     values: [2, 4, 8]
   depth:
-    values: [1, 2, 4]
+    values: [2, 4, 8]
 
 command:
   - ${env}
