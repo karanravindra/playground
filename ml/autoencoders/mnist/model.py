@@ -2,6 +2,10 @@ from torch import nn
 from torch.nn import functional as F
 from torchinfo import summary
 from nn_zoo.models.components import DepthwiseSeparableConv2d, VectorQuantizer
+import lpips
+
+import warnings
+warnings.filterwarnings("ignore")
 
 
 class Block(nn.Module):
@@ -40,7 +44,8 @@ class DownBlock(nn.Module):
 
     def forward(self, x):
         return self.block(x)
-    
+
+
 class UpBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, depth: int):
         super(UpBlock, self).__init__()
@@ -52,6 +57,7 @@ class UpBlock(nn.Module):
     def forward(self, x):
         return self.block(x)
 
+
 class AutoEncoder(nn.Module):
     def __init__(self, width: int, depth: int):
         super(AutoEncoder, self).__init__()
@@ -62,9 +68,11 @@ class AutoEncoder(nn.Module):
             DownBlock(width * 4, width * 4, depth),
             DepthwiseSeparableConv2d(width * 4, width * 4, 3),
         )
-        self.proj_in = nn.Identity() # nn.Conv2d(width, width, 1)
-        self.vq = nn.Identity() # VectorQuantizer(width, 8, use_ema=True, decay=0.99, epsilon=1e-5)
-        self.proj_out = nn.Identity() # nn.Conv2d(width, width, 1)
+        self.proj_in = nn.Identity()  # nn.Conv2d(width, width, 1)
+        self.vq = (
+            nn.Identity()
+        )  # VectorQuantizer(width, 8, use_ema=True, decay=0.99, epsilon=1e-5)
+        self.proj_out = nn.Identity()  # nn.Conv2d(width, width, 1)
         self.decoder = nn.Sequential(
             DepthwiseSeparableConv2d(width * 4, width * 4, 3),
             UpBlock(width * 4, width * 4, depth),
@@ -74,28 +82,28 @@ class AutoEncoder(nn.Module):
             nn.Sigmoid(),
         )
 
+        self.register_module("lpips", lpips.LPIPS(net="squeeze", verbose=False))
+
     def encode(self, x):
         x = self.encoder(x)
         x = self.proj_in(x)
-        return self.vq(x) # quant_x, dict_loss, commit_loss, indices = self.vq(x)
-    
+        return self.vq(x)  # quant_x, dict_loss, commit_loss, indices = self.vq(x)
+
     def decode(self, x):
         x = self.proj_out(x)
         x = self.decoder(x)
         return x
 
-    def forward(self, x, y=None):
+    def forward(self, x):
         x = self.encode(x)
         x = self.decode(x)
         return x
-
-    @classmethod
-    def loss(cls, x, y):
-        return F.binary_cross_entropy(x, y)
+    
+    # @classmethod
+    def loss(self, x, y):
+        return F.binary_cross_entropy(x, y) + self.lpips(x, y)
 
 
 if __name__ == "__main__":
-    import torch
     model = AutoEncoder(width=4, depth=4)
-    model = torch.compile(model, backend="jit")
-    summary(model, input_size=(64, 1, 32, 32), depth=2, col_names=["output_size", "params_percent"])
+    summary(model, input_size=(512, 1, 32, 32), depth=2, col_names=["output_size", "params_percent"])

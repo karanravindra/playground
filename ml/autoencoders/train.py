@@ -16,7 +16,7 @@ def parse_args():
         depth=4,
         optim="adam",
         batch_size=128,
-        epochs=100,
+        epochs=200,
         num_workers=2,
         prefetch_factor=4,
         pin_memory=True,
@@ -73,12 +73,12 @@ def main(args, ModelType, DataModuleType):
         dm=dm,
         optim=args.optim,
         optim_kwargs={"lr": args.learning_rate},
+        scheduler="multisteplr",
+        scheduler_args={"milestones": [25, 100, 175], "gamma": 0.5},
     )
-    import torch
-    classifier_trainer.model = torch.compile(classifier_trainer.model, backend="aot_eager")
 
     logger = WandbLogger(
-        project="mnist-autoencoder", name="autoencoder", log_model=True
+        project=f"{args.model}-autoencoder", name="autoencoder", log_model=True
     )
     logger.watch(classifier_trainer.model.encoder, log="all")
     logger.watch(classifier_trainer.model.decoder, log="all")
