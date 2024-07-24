@@ -11,14 +11,14 @@ import wandb
 def parse_args():
     params = dict(
         model="mnist",
-        learning_rate=1e-3,
-        width=4,
+        learning_rate=4e-4,
+        width=1,
         depth=4,
         optim="adam",
         batch_size=128,
         epochs=200,
-        num_workers=2,
-        prefetch_factor=4,
+        num_workers=4,
+        prefetch_factor=32,
         pin_memory=True,
         persistent_workers=True,
     )
@@ -74,7 +74,7 @@ def main(args, ModelType, DataModuleType):
         optim=args.optim,
         optim_kwargs={"lr": args.learning_rate},
         scheduler="multisteplr",
-        scheduler_args={"milestones": [25, 100, 175], "gamma": 0.5},
+        scheduler_args={"milestones": [25, 100, 175], "gamma": 1},
     )
 
     logger = WandbLogger(

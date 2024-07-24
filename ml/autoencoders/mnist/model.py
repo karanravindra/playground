@@ -33,7 +33,6 @@ class Block(nn.Module):
             x = layer(x) + x
         return x
 
-
 class DownBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, depth: int):
         super(DownBlock, self).__init__()
@@ -44,7 +43,6 @@ class DownBlock(nn.Module):
 
     def forward(self, x):
         return self.block(x)
-
 
 class UpBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, depth: int):
@@ -57,7 +55,6 @@ class UpBlock(nn.Module):
     def forward(self, x):
         return self.block(x)
 
-
 class AutoEncoder(nn.Module):
     def __init__(self, width: int, depth: int):
         super(AutoEncoder, self).__init__()
@@ -66,23 +63,22 @@ class AutoEncoder(nn.Module):
             DownBlock(width, width * 2, depth),
             DownBlock(width * 2, width * 4, depth),
             DownBlock(width * 4, width * 4, depth),
-            DepthwiseSeparableConv2d(width * 4, width * 4, 3),
+            DepthwiseSeparableConv2d(width * 4, width * 1, 3),
         )
         self.proj_in = nn.Identity()  # nn.Conv2d(width, width, 1)
-        self.vq = (
-            nn.Identity()
-        )  # VectorQuantizer(width, 8, use_ema=True, decay=0.99, epsilon=1e-5)
+        self.vq = nn.Identity()
+        # VectorQuantizer(width, 8, use_ema=True, decay=0.99, epsilon=1e-5)
         self.proj_out = nn.Identity()  # nn.Conv2d(width, width, 1)
         self.decoder = nn.Sequential(
-            DepthwiseSeparableConv2d(width * 4, width * 4, 3),
+            DepthwiseSeparableConv2d(width * 1, width * 4, 3),
             UpBlock(width * 4, width * 4, depth),
             UpBlock(width * 4, width * 2, depth),
             UpBlock(width * 2, width, depth),
             Block(width, 1, depth),
-            nn.Sigmoid(),
+            nn.Tanh(),
         )
 
-        self.register_module("lpips", lpips.LPIPS(net="squeeze", verbose=False))
+        self.register_module("lpips", lpips.LPIPS(net="squeeze", verbose=False, lpips=False))
 
     def encode(self, x):
         x = self.encoder(x)
@@ -101,9 +97,13 @@ class AutoEncoder(nn.Module):
     
     # @classmethod
     def loss(self, x, y):
-        return F.binary_cross_entropy(x, y) + self.lpips(x, y)
+        lpips = self.lpips(x, y).mean()
+        return {
+            "loss": F.binary_cross_entropy(x, y) + lpips,
+            "lpips": lpips,
+        }
 
 
 if __name__ == "__main__":
-    model = AutoEncoder(width=4, depth=4)
+    model = AutoEncoder(width=8, depth=4)
     summary(model, input_size=(512, 1, 32, 32), depth=2, col_names=["output_size", "params_percent"])
