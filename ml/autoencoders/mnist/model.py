@@ -5,6 +5,7 @@ from nn_zoo.models.components import DepthwiseSeparableConv2d, VectorQuantizer
 import lpips
 
 import warnings
+
 warnings.filterwarnings("ignore")
 
 
@@ -33,6 +34,7 @@ class Block(nn.Module):
             x = layer(x) + x
         return x
 
+
 class DownBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, depth: int):
         super(DownBlock, self).__init__()
@@ -44,6 +46,7 @@ class DownBlock(nn.Module):
     def forward(self, x):
         return self.block(x)
 
+
 class UpBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, depth: int):
         super(UpBlock, self).__init__()
@@ -54,6 +57,7 @@ class UpBlock(nn.Module):
 
     def forward(self, x):
         return self.block(x)
+
 
 class AutoEncoder(nn.Module):
     def __init__(self, width: int, depth: int):
@@ -78,7 +82,9 @@ class AutoEncoder(nn.Module):
             nn.Tanh(),
         )
 
-        self.register_module("lpips", lpips.LPIPS(net="squeeze", verbose=False, lpips=False))
+        self.register_module(
+            "lpips", lpips.LPIPS(net="squeeze", verbose=False, lpips=False)
+        )
 
     def encode(self, x):
         x = self.encoder(x)
@@ -94,16 +100,30 @@ class AutoEncoder(nn.Module):
         x = self.encode(x)
         x = self.decode(x)
         return x
-    
+
     # @classmethod
     def loss(self, x, y):
+        mse = F.mse_loss(x, y)
+        bce = F.binary_cross_entropy(x, y)
+        psnr = 10 * (1 / mse).log10()
+        ssim = F.ssim(x, y)
         lpips = self.lpips(x, y).mean()
+
         return {
-            "loss": F.binary_cross_entropy(x, y) + lpips,
+            "loss": mse,
+            "mse": mse,
+            "bce": bce,
+            "psnr": psnr,
+            "ssim": ssim,
             "lpips": lpips,
         }
 
 
 if __name__ == "__main__":
     model = AutoEncoder(width=8, depth=4)
-    summary(model, input_size=(512, 1, 32, 32), depth=2, col_names=["output_size", "params_percent"])
+    summary(
+        model,
+        input_size=(512, 1, 32, 32),
+        depth=2,
+        col_names=["output_size", "params_percent"],
+    )
