@@ -18,7 +18,7 @@ idx_to_char = {
 char_to_idx = {char: idx for idx, char in idx_to_char.items()}
 
 parser = argparse.ArgumentParser("Bracket Dataset Generator")
-parser.add_argument("--seq_len", default=62, type=int, help="Length of the sequence")
+parser.add_argument("--seq_len", default=64, type=int, help="Length of the sequence")
 parser.add_argument(
     "--num_seq", default=60_000, type=int, help="Number of sequences to generate"
 )

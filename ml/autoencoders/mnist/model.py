@@ -2,7 +2,8 @@ from torch import nn
 from torch.nn import functional as F
 from torchinfo import summary
 from nn_zoo.models.components import DepthwiseSeparableConv2d, VectorQuantizer
-import lpips
+from torchmetrics.functional.image.ssim import structural_similarity_index_measure as ssim_func
+from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
 
 import warnings
 
@@ -67,24 +68,21 @@ class AutoEncoder(nn.Module):
             DownBlock(width, width * 2, depth),
             DownBlock(width * 2, width * 4, depth),
             DownBlock(width * 4, width * 4, depth),
-            DepthwiseSeparableConv2d(width * 4, width * 1, 3),
+            DepthwiseSeparableConv2d(width * 4, width * 2, 3),
         )
         self.proj_in = nn.Identity()  # nn.Conv2d(width, width, 1)
         self.vq = nn.Identity()
-        # VectorQuantizer(width, 8, use_ema=True, decay=0.99, epsilon=1e-5)
         self.proj_out = nn.Identity()  # nn.Conv2d(width, width, 1)
         self.decoder = nn.Sequential(
-            DepthwiseSeparableConv2d(width * 1, width * 4, 3),
+            DepthwiseSeparableConv2d(width * 2, width * 4, 3),
             UpBlock(width * 4, width * 4, depth),
             UpBlock(width * 4, width * 2, depth),
             UpBlock(width * 2, width, depth),
             Block(width, 1, depth),
-            nn.Tanh(),
+            nn.Sigmoid(),
         )
-
-        self.register_module(
-            "lpips", lpips.LPIPS(net="squeeze", verbose=False, lpips=False)
-        )
+        
+        self.register_module("lpips", LPIPS(net_type="squeeze", normalize=True))
 
     def encode(self, x):
         x = self.encoder(x)
@@ -100,30 +98,38 @@ class AutoEncoder(nn.Module):
         x = self.encode(x)
         x = self.decode(x)
         return x
-
-    # @classmethod
+    # @staticmethod
     def loss(self, x, y):
         mse = F.mse_loss(x, y)
         bce = F.binary_cross_entropy(x, y)
         psnr = 10 * (1 / mse).log10()
-        ssim = F.ssim(x, y)
-        lpips = self.lpips(x, y).mean()
+        ssim = ssim_func(x, y)
+        lpips = self.lpips(x.repeat(1, 3, 1, 1), y.repeat(1, 3, 1, 1))
 
         return {
-            "loss": mse,
-            "mse": mse,
+            "loss": bce + lpips,
             "bce": bce,
-            "psnr": psnr,
+            "mse": mse,
             "ssim": ssim,
+            "psnr": psnr,
             "lpips": lpips,
         }
 
 
 if __name__ == "__main__":
-    model = AutoEncoder(width=8, depth=4)
-    summary(
-        model,
-        input_size=(512, 1, 32, 32),
-        depth=2,
-        col_names=["output_size", "params_percent"],
-    )
+    import torch
+    
+    model = AutoEncoder(width=8, depth=4).cuda()
+    
+    x1 = torch.rand(1, 1, 32, 32).cuda()# * 2 - 1
+    x2 = torch.tanh(model(x1))
+    print(x1.shape, x2.shape)
+    
+    print(f"loss: {model.loss(x2, x1)}")
+    
+    # summary(
+    #     model,
+    #     input_size=(512, 1, 32, 32),
+    #     depth=2,
+    #     col_names=["output_size", "params_percent"],
+    # )
