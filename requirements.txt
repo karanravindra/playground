@@ -1,3 +1,5 @@
 nn-zoo @ git+https://github.com/karanravindra/nn-zoo@v1.1.0-alpha.2
 wandb
-lpips
+torchmetrics[image]
+diffusers
+transformers

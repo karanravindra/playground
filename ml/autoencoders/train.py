@@ -11,12 +11,12 @@ import wandb
 def parse_args():
     params = dict(
         model="mnist",
-        learning_rate=1e-3,
-        width=2,
-        depth=8,
+        learning_rate=4e-4,
+        width=1,
+        depth=4,
         optim="adam",
-        batch_size=128,
-        epochs=200,
+        batch_size=64,
+        epochs=50,
         num_workers=4,
         prefetch_factor=4,
         pin_memory=True,

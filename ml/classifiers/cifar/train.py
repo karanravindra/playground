@@ -15,17 +15,18 @@ from nn_zoo.trainers import ClassifierTrainer
 class Block(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, num_layers: int):
         super(Block, self).__init__()
-        self.layers = nn.ModuleList([
-            self._block(in_channels, out_channels)
-            if i == 0
-            else self._block(out_channels, out_channels)
-            for i in range(num_layers)
-        ])
+        self.layers = nn.ModuleList(
+            [
+                self._block(in_channels, out_channels)
+                if i == 0
+                else self._block(out_channels, out_channels)
+                for i in range(num_layers)
+            ]
+        )
 
     def _block(self, in_channels: int, out_channels: int):
         return nn.Sequential(
             DepthwiseSeparableConv2d(in_channels, out_channels, 3),
-            # nn.BatchNorm2d(out_channels),
             nn.GroupNorm(out_channels // 4 if out_channels >= 4 else 1, out_channels),
             nn.ReLU(),
         )
@@ -141,10 +142,12 @@ def main(args):
         data_dir="data",
         dataset_params={
             "download": True,
-            "transform": torchvision.transforms.Compose([
-                torchvision.transforms.Resize((32, 32)),
-                torchvision.transforms.ToTensor(),
-            ]),
+            "transform": torchvision.transforms.Compose(
+                [
+                    torchvision.transforms.Resize((32, 32)),
+                    torchvision.transforms.ToTensor(),
+                ]
+            ),
         },
         loader_params={
             "batch_size": args.batch_size,
