@@ -11,14 +11,14 @@ import wandb
 def parse_args():
     params = dict(
         model="mnist",
-        learning_rate=4e-4,
-        width=1,
+        learning_rate=1e-3,
+        width=4,
         depth=4,
         optim="adam",
-        batch_size=64,
-        epochs=50,
+        batch_size=128,
+        epochs=200,
         num_workers=4,
-        prefetch_factor=4,
+        prefetch_factor=16,
         pin_memory=True,
         persistent_workers=True,
     )
@@ -53,6 +53,7 @@ def main(args, ModelType, DataModuleType):
                 [
                     torchvision.transforms.Resize((32, 32)),
                     torchvision.transforms.ToTensor(),
+                    torchvision.transforms.Lambda(lambda x: x * 2 - 1),
                 ]
             ),
         },
@@ -84,7 +85,7 @@ def main(args, ModelType, DataModuleType):
     logger.watch(classifier_trainer.model.decoder, log="all")
     logger.log_hyperparams(vars(args))
     logger.log_hyperparams(
-        {"num_params": sum(p.numel() for p in classifier_trainer.model.parameters())}
+        {"num_params": sum(p.numel() for p in classifier_trainer.model.parameters() if p.requires_grad)}
     )
 
     # log folder
@@ -124,6 +125,9 @@ if __name__ == "__main__":
         DataModuleType = MNISTDataModule
     elif args.model.lower() == "cifar":
         from nn_zoo.datamodules import CIFARDataModule
+        
+    elif args.model.lower() == "ffhq":
+        from nn_zoo.datamodules import FFHQDataModule
 
         DataModuleType = CIFARDataModule
 

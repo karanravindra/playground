@@ -2,6 +2,7 @@ from torch import nn
 from torch.nn import functional as F
 from torchinfo import summary
 from nn_zoo.models.components import DepthwiseSeparableConv2d, VectorQuantizer
+from torchmetrics.functional.image import structural_similarity_index_measure as ssim_func
 import lpips
 
 import warnings
@@ -23,7 +24,7 @@ class Block(nn.Module):
 
     def _block(self, in_channels: int, out_channels: int):
         return nn.Sequential(
-            nn.GroupNorm(in_channels // 4 if in_channels >= 4 else 1, in_channels),
+            nn.GroupNorm(1, in_channels),
             nn.GELU(),
             DepthwiseSeparableConv2d(in_channels, out_channels, 3),
         )
@@ -61,22 +62,22 @@ class AutoEncoder(nn.Module):
     def __init__(self, width: int, depth: int):
         super(AutoEncoder, self).__init__()
         self.encoder = nn.Sequential(
-            Block(1, width, depth),
-            DownBlock(width, width * 2, depth),
-            DownBlock(width * 2, width * 4, depth),
-            DownBlock(width * 4, width * 4, depth),
-            DepthwiseSeparableConv2d(width * 4, width * 1, 3),
+            Block(1, width * 4, depth),
+            DownBlock(width, width, depth),
+            DownBlock(width, width, depth),
+            DownBlock(width, width, depth),
+            DepthwiseSeparableConv2d(width * 4, width * 2, 1, padding=0),
         )
         self.proj_in = nn.Identity()
         self.vq = nn.Identity()
         # VectorQuantizer(width, 8, use_ema=True, decay=0.99, epsilon=1e-5)
         self.proj_out = nn.Identity()  # nn.Conv2d(width, width, 1)
         self.decoder = nn.Sequential(
-            DepthwiseSeparableConv2d(width * 1, width * 4, 3),
-            UpBlock(width * 4, width * 4, depth),
-            UpBlock(width * 4, width * 2, depth),
-            UpBlock(width * 2, width, depth),
-            Block(width, 1, depth),
+            DepthwiseSeparableConv2d(width * 2, width * 4, 1, padding=0),
+            UpBlock(width, width, depth),
+            UpBlock(width, width, depth),
+            UpBlock(width, width, depth),
+            Block(width * 4, 1, depth),
             nn.Tanh(),
         )
 
@@ -102,13 +103,14 @@ class AutoEncoder(nn.Module):
     # @classmethod
     def loss(self, x, y):
         mse = F.mse_loss(x, y)
-        bce = F.binary_cross_entropy(x, y)
+        bce = F.binary_cross_entropy((x + 1) / 2, (y + 1) / 2)
         psnr = 10 * (1 / mse).log10()
         ssim = ssim_func(x, y)
-        lpips = self.lpips(x.repeat(1, 3, 1, 1), y.repeat(1, 3, 1, 1))
+        lpips = self.lpips(x.repeat(1, 3, 1, 1), y.repeat(1, 3, 1, 1)).mean()
 
         return {
-            "loss": mse,
+            "loss": bce + lpips,
+            "bce": bce,
             "mse": mse,
             "ssim": ssim,
             "psnr": psnr,
@@ -117,7 +119,12 @@ class AutoEncoder(nn.Module):
 
 
 if __name__ == "__main__":
-    model = AutoEncoder(width=8, depth=4)
+    import torch
+    
+    model = AutoEncoder(width=4, depth=4).cuda()
+    input_tensor = torch.rand(512, 1, 32, 32).cuda()
+    output = model(input_tensor)
+    print(model.loss(output, input_tensor))
     summary(
         model,
         input_size=(512, 1, 32, 32),
