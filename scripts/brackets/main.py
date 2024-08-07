@@ -11,9 +11,7 @@ idx_to_char = {
     5: ")",
     6: "]",
     7: ">",
-    8: "SOS ",
-    9: " EOS",
-    10: "_",
+    8: "_",
 }
 char_to_idx = {char: idx for idx, char in idx_to_char.items()}
 
@@ -42,7 +40,11 @@ for _ in range(args.num_seq):
     # len = np.random.randint(args.seq_len // 4, args.seq_len // 2)
     len = args.seq_len // 2
     start_seq = np.random.randint(0, 4, (len,)).tolist()
-    full_seq = [8] + start_seq + list(map(lambda x: x + 4, reversed(start_seq))) + [9] + [10] * (args.seq_len - 2 * len - 2)
+    full_seq = (
+        start_seq
+        + list(map(lambda x: x + 4, reversed(start_seq)))
+        + [8] * (args.seq_len - 2 * len - 2)
+    )
 
     seq = (
         "".join(list(map(lambda x: idx_to_char[x], full_seq)))
